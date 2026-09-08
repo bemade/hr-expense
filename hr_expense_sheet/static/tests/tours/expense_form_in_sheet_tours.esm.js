@@ -61,6 +61,15 @@ registry.category("web_tour.tours").add("do_not_create_zero_amount_expense_in_sh
             trigger: ".modal .modal-footer .o_form_button_save",
             run: "click",
         },
+        // Patch Durpro : étape du tour 18.0 d'origine, retirée dans la PR OCA ;
+        // la fenêtre d'erreur (montant nul dans un rapport) doit être fermée
+        // avant de revenir au formulaire.
+        {
+            content:
+                "Close the displayed user error indicating that the expense total cannot be set to zero if it is linked to a report.",
+            trigger: ".modal .modal-footer .btn-primary.o-default-button",
+            run: "click",
+        },
         {
             content: "Set total amount to ten",
             trigger:

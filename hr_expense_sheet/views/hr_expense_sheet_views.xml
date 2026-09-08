@@ -260,6 +260,7 @@
                                     'default_company_id': company_id,
                                     'default_employee_id': employee_id,
                                     'default_payment_mode': payment_mode or 'own_account',
+                                    'check_total_amount_not_zero': True,
                                 }"
                                 readonly="not is_editable"
                                 force_save="1"

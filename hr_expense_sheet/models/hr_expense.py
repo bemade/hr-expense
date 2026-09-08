@@ -90,13 +90,58 @@ class HrExpense(models.Model):
         sheets._do_refuse(reason)
         return res
 
+    # Patch Durpro : contrôle du montant nul reporté de la 18.0
+    # (hr_expense.check_amount_not_zero). Sans lui, le tour
+    # do_not_create_zero_amount_expense_in_sheet du module échoue et une
+    # dépense à 0 peut être ajoutée à un rapport depuis le formulaire.
+    def check_amount_not_zero(self, vals):
+        error_msgs = []
+        if "total_amount" in vals and any(
+            expense.company_currency_id.is_zero(vals["total_amount"])
+            for expense in self
+        ):
+            error_msgs.append(
+                self.env._(
+                    "You cannot set the expense total to 0 if it's linked to a report."
+                )
+            )
+        if "total_amount_currency" in vals and any(
+            expense.currency_id.is_zero(vals["total_amount_currency"])
+            for expense in self
+        ):
+            error_msgs.append(
+                self.env._(
+                    "You cannot set the expense total in currency to 0 "
+                    "if it's linked to a report."
+                )
+            )
+        if error_msgs:
+            raise UserError("\n".join(error_msgs))
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        expenses = super().create(vals_list)
+        if self.env.context.get("check_total_amount_not_zero"):
+            for expense, vals in zip(expenses, vals_list, strict=True):
+                expense.check_amount_not_zero(vals)
+        return expenses
+
     def write(self, vals):
         expense_to_previous_sheet = {}
+        enforced_non_zero_expenses = self.env["hr.expense"]
         if "sheet_id" in vals:
             # Store the previous sheet of the expenses to unlink the attachments later
             # if needed
             for expense in self:
                 expense_to_previous_sheet[expense] = expense.sheet_id
+            # Patch Durpro : si on lie un rapport, aucune dépense ne peut être à 0 ;
+            # si on le délie, pas de contrôle.
+            if vals.get("sheet_id"):
+                enforced_non_zero_expenses = self
+        else:
+            enforced_non_zero_expenses = self.filtered("sheet_id")
+        if enforced_non_zero_expenses:
+            enforced_non_zero_expenses.check_amount_not_zero(vals)
         res = super().write(vals)
         if "sheet_id" in vals:
             # The sheet_id has been modified, either by an explicit write on
