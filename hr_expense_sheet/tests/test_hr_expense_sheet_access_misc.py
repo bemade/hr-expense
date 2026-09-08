@@ -11,8 +11,12 @@ from odoo.tools import mute_logger
 from odoo.tools.misc import format_date
 
 from odoo.addons.hr_expense_sheet.tests.common import TestHrExpenseSheetCommon
+from odoo.tests import tagged
 
 
+# Patch Durpro : comme les autres fichiers de tests du module, ces tests ont
+# besoin du registre complet (plan comptable) ; sans ce tag ils tombent en -i.
+@tagged("-at_install", "post_install")
 class TestHrExpenseSheetMisc(TestHrExpenseSheetCommon):
     def test_expense_corner_case_changing_employee(self):
         """
