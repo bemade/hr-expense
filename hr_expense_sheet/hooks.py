@@ -1,7 +1,7 @@
 # Copyright 2026 Tecnativa - Víctor Martínez
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
-from odoo.tools.sql import column_exists
+from odoo.tools.sql import column_exists, table_exists
 
 
 def pre_init_hook(env):
@@ -15,6 +15,11 @@ def pre_init_hook(env):
     """)
     has_former_sheet = env.cr.fetchone()[0]
     if not has_former_sheet:
+        return
+    # Patch Durpro : l'upgrade Odoo SA 18 -> 19 supprime la table
+    # hr_expense_sheet tout en conservant hr_expense.former_sheet_id ; sans la
+    # table, il n'y a rien a convertir (voir le commit de vendoring).
+    if not table_exists(env.cr, "hr_expense_sheet"):
         return
     # Change states
     env.cr.execute(
