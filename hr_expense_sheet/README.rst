@@ -68,9 +68,9 @@ Authors
 Contributors
 ------------
 
--  `Tecnativa <https://www.tecnativa.com>`__:
+- `Tecnativa <https://www.tecnativa.com>`__:
 
-   -  Víctor Martínez
+  - Víctor Martínez
 
 Maintainers
 -----------

@@ -343,6 +343,29 @@ class HrExpenseSheet(models.Model):
                 sheet.state = "paid"
             elif all(expense.state == "refused" for expense in expenses):
                 sheet.state = "refused"
+            # Patch Durpro : les branches ci-dessus supposent un état
+            # uniforme sur toutes les lignes. Un rapport dont certaines
+            # lignes ont été approuvées séparément (ex. via l'assistant de
+            # doublons) tombait dans aucune branche et gardait un état
+            # calculé périmé, avec un bouton Approuver visible mais inerte.
+            # Ces solutions de repli couvrent tout mélange restant. "submitted"
+            # est prioritaire pour que le bouton Approuver reste actif et
+            # approuve tout le reste (voir action_approve). "approved" passe
+            # ensuite avant "draft" : un rapport déjà approuvé auquel un
+            # comptable rattache une nouvelle ligne brouillon (write() plus
+            # bas, réservé aux comptables) doit rester "approved" et non
+            # retomber à "draft", sans quoi la protection en écriture des
+            # rapports approuvés/payés ci-dessous serait contournée.
+            elif any(expense.state == "submitted" for expense in expenses):
+                sheet.state = "submitted"
+            elif any(expense.state == "approved" for expense in expenses):
+                sheet.state = "approved"
+            elif any(expense.state == "draft" for expense in expenses):
+                sheet.state = "draft"
+            elif any(expense.state == "posted" for expense in expenses):
+                sheet.state = "posted"
+            else:
+                sheet.state = "paid"
 
     @api.depends("employee_id")
     def _compute_manager_id(self):
@@ -691,10 +714,31 @@ class HrExpenseSheet(models.Model):
 
     def action_approve(self):
         sheets = self.filtered(lambda x: x.state == "submitted")
-        res = sheets.expense_line_ids.action_approve()
+        # Patch Durpro : ne (re)soumettre à l'approbation core que les
+        # lignes encore "submitted". Un rapport dans un état mixte (ex.
+        # une partie déjà approuvée via l'assistant de doublons) ne fait
+        # ainsi pas revérifier des lignes déjà approuvées.
+        lines_to_approve = sheets.expense_line_ids.filtered(
+            lambda e: e.state == "submitted"
+        )
+        res = lines_to_approve.action_approve()
         if res:
+            # Patch Durpro : l'assistant "Valider les dépenses en double"
+            # de core n'approuve que les lignes en doublon qu'on lui passe
+            # (default_expense_ids) et ignore le reste du rapport. On lui
+            # transmet donc les rapports concernés dans le contexte de
+            # l'action ; l'assistant, étendu ci-dessous, s'en sert pour
+            # approuver/refuser le rapport en entier plutôt que les seules
+            # lignes en doublon.
+            res["context"] = {
+                **res.get("context", {}),
+                "hr_expense_sheet_approve_ids": sheets.ids,
+            }
             return res  # duplicate wizard
-        for sheet in sheets:
+        sheets._do_approve()
+
+    def _do_approve(self):
+        for sheet in self:
             sheet.write(
                 {
                     "approval_state": "approved",
@@ -702,7 +746,7 @@ class HrExpenseSheet(models.Model):
                     "approval_date": fields.Date.context_today(sheet),
                 }
             )
-        sheets.sudo().activity_update()
+        self.sudo().activity_update()
 
     def action_refuse(self):
         expenses = self.expense_line_ids
