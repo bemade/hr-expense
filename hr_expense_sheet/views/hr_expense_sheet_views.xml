@@ -371,6 +371,7 @@
                                 <field
                                     name="total_amount"
                                     nolabel="1"
+                                    readonly="1"
                                     class="oe_subtotal_footer_separator"
                                 />
                                 <field
