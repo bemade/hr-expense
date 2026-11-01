@@ -296,11 +296,18 @@ class HrExpenseSheet(models.Model):
         for sheet in self:
             sheet.untaxed_amount = sum(sheet.expense_line_ids.mapped("untaxed_amount"))
 
-    @api.depends("expense_line_ids.amount_residual")
+    @api.depends("expense_line_ids.amount_residual", "expense_line_ids.account_move_id")
     def _compute_amount_residual(self):
+        # The lines of a report share one journal entry and each line's
+        # amount_residual is that whole entry's residual: sum it per entry,
+        # not per line, or a 3-line report shows 3 times what is due.
         for sheet in self:
-            sheet.amount_residual = sum(
-                sheet.expense_line_ids.mapped("amount_residual")
+            lines = sheet.expense_line_ids
+            moves = lines.account_move_id
+            sheet.amount_residual = sum(moves.mapped("amount_residual")) + sum(
+                lines.filtered(lambda e: not e.account_move_id).mapped(
+                    "amount_residual"
+                )
             )
 
     @api.depends("selectable_payment_method_line_ids")
